@@ -1,74 +1,56 @@
 import { useEffect, useState } from "react";
-import HostGroup from "./HostGroup"; // Importe o componente HostGroup
 
-const Dashboard = () => {
-  const [hostgroups, setHostgroups] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+type HostStatus = {
+  ip: string;
+  status: string;
+};
+
+export default function Dashboard() {
+  const [hosts, setHosts] = useState<HostStatus[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch("http://127.0.0.1:5000/api/hosts");
+      if (!response.ok) {
+        throw new Error("Erro ao buscar os dados");
+      }
+      const data: HostStatus[] = await response.json();
+      setHosts(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        console.log("🔄 Carregando dados...");
-        const response = await fetch("http://127.0.0.1:5000/api/hostgroups");
-
-        if (!response.ok) {
-          throw new Error(`Erro HTTP: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log("✅ Dados recebidos:", data);
-        setHostgroups(data);
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          console.error("❌ Erro ao carregar dados:", error.message);
-          setError(error.message);
-        } else {
-          console.error("❌ Erro desconhecido:", error);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
+    const interval = setInterval(fetchData, 10000); // Atualiza a cada 10 segundos
+    return () => clearInterval(interval);
   }, []);
-
-  if (loading) return <div className="text-center mt-5">⏳ Carregando...</div>;
-  if (error) return <div className="text-red-500 text-center">{error}</div>;
-  if (hostgroups.length === 0) return <div className="text-center mt-5">⚠️ Nenhum grupo de hosts encontrado.</div>;
-
-  const nextGroup = () => {
-    setCurrentGroupIndex((prevIndex) => (prevIndex + 1) % hostgroups.length);
-  };
-
-  const prevGroup = () => {
-    setCurrentGroupIndex((prevIndex) =>
-      prevIndex === 0 ? hostgroups.length - 1 : prevIndex - 1
-    );
-  };
-
-  const currentGroup = hostgroups[currentGroupIndex];
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Dashboard Zabbix</h1>
-
-      <div className="flex justify-between items-center">
-        <button onClick={prevGroup} className="p-2 bg-gray-300 rounded-lg">⬅️ Anterior</button>
-
-        {/* Renderizando o componente HostGroup */}
-        <HostGroup name={currentGroup.name} hosts={currentGroup.hosts} />
-
-        <button onClick={nextGroup} className="p-2 bg-gray-300 rounded-lg">Próximo ➡️</button>
+      <h1 className="text-2xl font-bold mb-4">Monitoramento de Hosts</h1>
+      {loading && <p>Carregando...</p>}
+      {error && <p className="text-red-500">Erro: {error}</p>}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {hosts.map((host, index) => (
+          <div
+            key={index}
+            className={`p-4 rounded-lg shadow-md ${
+              host.status === "Online" ? "bg-green-200" : "bg-red-200"
+            }`}
+          >
+            <p className="text-lg font-semibold">{host.ip}</p>
+            <p>Status: {host.status}</p>
+          </div>
+        ))}
       </div>
-
-      <p className="text-center mt-2">
-        Grupo {currentGroupIndex + 1} de {hostgroups.length}
-      </p>
     </div>
   );
-};
-
-export default Dashboard;
+}
